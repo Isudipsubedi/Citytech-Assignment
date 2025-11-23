@@ -1,7 +1,9 @@
 // Transaction-related types and interfaces
 
 export interface Transaction {
+  id?: string; // MockAPI ID
   txnId: number;
+  merchantId: string; // Associate with merchant
   amount: number;
   currency: string;
   status: 'completed' | 'pending' | 'failed' | 'reversed';
@@ -10,7 +12,8 @@ export interface Transaction {
   cardLast4: string;
   acquirer: string;
   issuer: string;
-  details: TransactionDetail[];
+  details?: TransactionDetail[];
+  createdAt?: string;
 }
 
 export interface TransactionDetail {
@@ -25,17 +28,19 @@ export interface TransactionSummary {
   totalAmount: number;
   currency: string;
   byStatus: {
-    completed: number;
-    pending: number;
-    failed: number;
+    completed?: number;
+    pending?: number;
+    failed?: number;
+    reversed?: number;
+    [key: string]: number | undefined;
   };
 }
 
 export interface TransactionResponse {
   merchantId: string;
-  dateRange: {
-    start: string;
-    end: string;
+  dateRange?: {
+    start?: string;
+    end?: string;
   };
   summary: TransactionSummary;
   transactions: Transaction[];

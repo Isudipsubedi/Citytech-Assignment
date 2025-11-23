@@ -1,149 +1,207 @@
+import { useState } from 'react';
 import './Merchants.css';
+import { MerchantForm } from '../components/merchants/MerchantForm';
+import { MerchantList } from '../components/merchants/MerchantList';
+import { MerchantDetails } from '../components/merchants/MerchantDetails';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { Notification } from '../components/common/Notification';
+import { Merchant, MerchantFormData } from '../types/merchant';
 
 /**
  * Merchants Page Component
  * 
- * This page is a placeholder for future merchant management functionality.
- * 
- * ASSIGNMENT: Implement the following features:
- * 
- * 1. **Merchant List View**
- *    - Display all merchants in a table or card layout
- *    - Show merchant ID, name, status, and contact information
- *    - Add search/filter functionality
- * 
- * 2. **Merchant Details**
- *    - Click on a merchant to view detailed information
- *    - Show merchant settings, payment methods, and statistics
- * 
- * 3. **Add/Edit Merchant**
- *    - Form to create new merchants
- *    - Edit existing merchant information
- *    - Validate merchant data before submission
- * 
- * 4. **API Integration**
- *    - Create merchant service API calls
- *    - GET /api/v1/merchants - List all merchants
- *    - GET /api/v1/merchants/{id} - Get merchant details
- *    - POST /api/v1/merchants - Create new merchant
- *    - PUT /api/v1/merchants/{id} - Update merchant
+ * Main page for merchant management with full CRUD operations
  */
 export const Merchants = () => {
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingMerchant, setEditingMerchant] = useState<Merchant | null>(null);
+  const [viewingMerchant, setViewingMerchant] = useState<Merchant | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<MerchantFormData | null>(null);
+  const [merchantToDelete, setMerchantToDelete] = useState<Merchant | null>(null);
+  
+  // Notification state
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+  };
+
+  const handleCreateMerchant = async (data: MerchantFormData) => {
+    try {
+      const { createMerchant } = await import('../services/merchantService');
+      await createMerchant(data);
+      showNotification('Merchant created successfully!', 'success');
+      setRefreshTrigger((prev) => prev + 1);
+      setIsFormOpen(false);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create merchant';
+      showNotification(errorMessage, 'error');
+      throw error;
+    }
+  };
+
+  const handleEditMerchant = (merchant: Merchant) => {
+    setEditingMerchant(merchant);
+    setIsFormOpen(true);
+  };
+
+  const handleViewMerchant = (merchant: Merchant) => {
+    setViewingMerchant(merchant);
+  };
+
+  const handleDeleteMerchant = (merchant: Merchant) => {
+    setMerchantToDelete(merchant);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!merchantToDelete?.id) {
+      setShowDeleteDialog(false);
+      setMerchantToDelete(null);
+      return;
+    }
+
+    try {
+      const { deleteMerchant } = await import('../services/merchantService');
+      await deleteMerchant(merchantToDelete.id);
+      showNotification('Merchant deleted successfully!', 'success');
+      setShowDeleteDialog(false);
+      setMerchantToDelete(null);
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to delete merchant';
+      showNotification(errorMessage, 'error');
+      setShowDeleteDialog(false);
+      setMerchantToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteDialog(false);
+    setMerchantToDelete(null);
+  };
+
+  const handleUpdateMerchant = async (data: MerchantFormData) => {
+    if (!editingMerchant?.id) {
+      throw new Error('Merchant ID is required for update');
+    }
+
+    // Store the form data and show confirmation dialog
+    // Don't close the form yet - wait for user confirmation
+    setPendingFormData(data);
+    setShowConfirmDialog(true);
+    
+    // Return resolved promise so form submission doesn't fail
+    // The form will stay open until user confirms or cancels
+    return Promise.resolve();
+  };
+
+  const confirmUpdate = async () => {
+    if (!editingMerchant?.id || !pendingFormData) {
+      setShowConfirmDialog(false);
+      setPendingFormData(null);
+      return;
+    }
+
+    try {
+      const { updateMerchant } = await import('../services/merchantService');
+      await updateMerchant(editingMerchant.id, pendingFormData);
+      showNotification('Merchant updated successfully!', 'success');
+      setShowConfirmDialog(false);
+      setPendingFormData(null);
+      setEditingMerchant(null);
+      setIsFormOpen(false);
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update merchant';
+      showNotification(errorMessage, 'error');
+      setShowConfirmDialog(false);
+      setPendingFormData(null);
+    }
+  };
+
+  const cancelUpdate = () => {
+    setShowConfirmDialog(false);
+    setPendingFormData(null);
+    // Keep form open so user can make changes
+  };
+
+  const handleFormClose = () => {
+    setIsFormOpen(false);
+    setEditingMerchant(null);
+  };
+
   return (
     <main className="container">
       <div className="placeholder-page">
         <div className="placeholder-header">
           <h1>🏢 Merchants Management</h1>
           <p className="subtitle">Manage merchant accounts and settings</p>
-          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f0f4ff', borderRadius: '8px', border: '2px solid #667eea' }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#667eea' }}>🎯 Target: 100 Points</h3>
-            <p style={{ margin: 0, fontSize: '14px' }}>Complete any combination of tasks below to reach 100 points. You don't need to complete all tasks.</p>
-          </div>
         </div>
 
-        <div className="feature-grid">
-          <div className="feature-card">
-            <div className="feature-icon">📋</div>
-            <h3>Merchant List <span style={{ backgroundColor: '#667eea', color: 'white', padding: '2px 8px', borderRadius: '8px', fontSize: '12px', marginLeft: '8px' }}>30 pts</span></h3>
-            <p>View and search all registered merchants</p>
-            <ul className="feature-list">
-              <li>Display merchant information in table format (10 pts)</li>
-              <li>Search and filter by name, ID, or status (5 pts)</li>
-              <li>Sort by various criteria (5 pts)</li>
-              <li>Pagination for large datasets (5 pts)</li>
-              <li>Loading states and error handling (5 pts)</li>
-            </ul>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-icon">➕</div>
-            <h3>Add New Merchant <span style={{ backgroundColor: '#667eea', color: 'white', padding: '2px 8px', borderRadius: '8px', fontSize: '12px', marginLeft: '8px' }}>25 pts</span></h3>
-            <p>Register new merchants to the platform</p>
-            <ul className="feature-list">
-              <li>Form with merchant details (name, email, phone) (8 pts)</li>
-              <li>Business information and registration (5 pts)</li>
-              <li>Submit to POST /api/v1/merchants (5 pts)</li>
-              <li>Input validation and error handling (4 pts)</li>
-              <li>Success notifications and form reset (3 pts)</li>
-            </ul>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-icon">✏️</div>
-            <h3>Edit Merchant Details <span style={{ backgroundColor: '#667eea', color: 'white', padding: '2px 8px', borderRadius: '8px', fontSize: '12px', marginLeft: '8px' }}>20 pts</span></h3>
-            <p>Update merchant information and settings</p>
-            <ul className="feature-list">
-              <li>Pre-populate form with existing data (5 pts)</li>
-              <li>Update contact details and address (5 pts)</li>
-              <li>Manage merchant status (active/inactive) (5 pts)</li>
-              <li>Submit to PUT /api/v1/merchants/:id (3 pts)</li>
-              <li>Confirmation dialogs (2 pts)</li>
-            </ul>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-icon">🔍</div>
-            <h3>Merchant Details View <span style={{ backgroundColor: '#667eea', color: 'white', padding: '2px 8px', borderRadius: '8px', fontSize: '12px', marginLeft: '8px' }}>25 pts</span></h3>
-            <p>View comprehensive merchant information</p>
-            <ul className="feature-list">
-              <li>Display complete merchant profile (5 pts)</li>
-              <li>Show transaction statistics (8 pts)</li>
-              <li>List recent transactions (7 pts)</li>
-              <li>View merchant activity timeline (3 pts)</li>
-              <li>Export transaction history (2 pts)</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="technical-notes">
-          <h2>📝 Technical Implementation Notes</h2>
-          <div className="notes-content">
-            <div className="note-section">
-              <h3>API Endpoints to Implement:</h3>
-              <ul>
-                <li><code>GET /api/v1/merchants</code> - List all merchants (with pagination)</li>
-                <li><code>GET /api/v1/merchants/{'{id}'}</code> - Get merchant details</li>
-                <li><code>POST /api/v1/merchants</code> - Create new merchant</li>
-                <li><code>PUT /api/v1/merchants/{'{id}'}</code> - Update merchant</li>
-                <li><code>DELETE /api/v1/merchants/{'{id}'}</code> - Deactivate merchant</li>
-              </ul>
-            </div>
-
-            <div className="note-section">
-              <h3>Components to Create:</h3>
-              <ul>
-                <li><code>MerchantList.tsx</code> - Table/list view of merchants</li>
-                <li><code>MerchantCard.tsx</code> - Individual merchant card component</li>
-                <li><code>MerchantForm.tsx</code> - Form for add/edit merchant</li>
-                <li><code>MerchantDetails.tsx</code> - Detailed merchant view</li>
-                <li><code>MerchantFilters.tsx</code> - Search and filter controls</li>
-              </ul>
-            </div>
-
-            <div className="note-section">
-              <h3>State Management:</h3>
-              <ul>
-                <li>Create custom hook: <code>useMerchants()</code></li>
-                <li>Manage merchant list state and loading states</li>
-                <li>Handle form validation and submission</li>
-                <li>Implement error handling and success notifications</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <div className="getting-started">
-          <h2>🚀 Getting Started</h2>
-          <p>To implement this feature:</p>
-          <ol>
-            <li>Create the merchant type definitions in <code>src/types/merchant.ts</code></li>
-            <li>Implement the merchant API service in <code>src/services/merchantService.ts</code></li>
-            <li>Create the custom hook <code>src/hooks/useMerchants.ts</code></li>
-            <li>Build the UI components in <code>src/components/merchants/</code></li>
-            <li>Update this page to use the new components</li>
-          </ol>
+        {/* Merchant List Table with Create Button */}
+        <div className="merchants-content-wrapper">
+          <MerchantList 
+            refreshTrigger={refreshTrigger} 
+            onEdit={handleEditMerchant}
+            onView={handleViewMerchant}
+            onDelete={handleDeleteMerchant}
+            onCreateClick={() => setIsFormOpen(true)}
+          />
         </div>
       </div>
+
+      {/* Merchant Form Modal */}
+      <MerchantForm
+        isOpen={isFormOpen}
+        merchant={editingMerchant}
+        onClose={handleFormClose}
+        onSubmit={editingMerchant ? handleUpdateMerchant : handleCreateMerchant}
+      />
+
+      {/* Confirmation Dialog for Update */}
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        title="Confirm Update"
+        message="Are you sure you want to update this merchant's information?"
+        confirmText="Update"
+        cancelText="Cancel"
+        onConfirm={confirmUpdate}
+        onCancel={cancelUpdate}
+      />
+
+      {/* Confirmation Dialog for Delete */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Delete Merchant"
+        message={`Are you sure you want to delete "${merchantToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
+
+      {/* Merchant Details Modal */}
+      {viewingMerchant && (
+        <MerchantDetails
+          merchant={viewingMerchant}
+          isOpen={!!viewingMerchant}
+          onClose={() => setViewingMerchant(null)}
+        />
+      )}
+
+      {/* Notification */}
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </main>
   );
 };

@@ -1,6 +1,8 @@
 package com.payment.config;
 
+import io.micronaut.http.HttpMethod;
 import io.micronaut.http.HttpRequest;
+import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MutableHttpResponse;
 import io.micronaut.http.annotation.Filter;
 import io.micronaut.http.filter.HttpServerFilter;
@@ -8,11 +10,26 @@ import io.micronaut.http.filter.ServerFilterChain;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 
+/**
+ * CORS Filter to handle cross-origin requests from frontend
+ */
 @Filter("/**")
 public class CorsFilter implements HttpServerFilter {
 
     @Override
     public Publisher<MutableHttpResponse<?>> doFilter(HttpRequest<?> request, ServerFilterChain chain) {
+        // Handle preflight OPTIONS request
+        if (request.getMethod() == HttpMethod.OPTIONS) {
+            return Flux.just(HttpResponse.ok()
+                .header("Access-Control-Allow-Origin", "http://localhost:3000")
+                .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
+                .header("Access-Control-Allow-Headers", "*")
+                .header("Access-Control-Expose-Headers", "*")
+                .header("Access-Control-Allow-Credentials", "true")
+                .header("Access-Control-Max-Age", "3600"));
+        }
+
+        // Handle actual requests
         return Flux.from(chain.proceed(request))
             .doOnNext(response -> {
                 response.header("Access-Control-Allow-Origin", "http://localhost:3000");

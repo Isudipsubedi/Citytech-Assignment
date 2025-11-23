@@ -1,0 +1,27 @@
+// PlantUML sequence: Daily settlement flow
+@startuml
+title Daily Settlement - Sequence
+participant Scheduler
+participant "Ingestion API" as Ingest
+participant Kafka
+participant "Stream Processor" as Stream
+participant "Settlement Engine" as Engine
+participant "Idempotency Store (Redis)" as Redis
+database "Ledger (Postgres)" as Ledger
+participant "Notification Service" as Notify
+
+Scheduler -> Ingest: trigger daily batch
+Ingest -> Kafka: publish(batch_txns)
+Kafka -> Stream: consumer
+Stream -> Engine: emit(settlement_task)
+Engine -> Redis: GET idempotency_key
+alt not processed
+  Engine -> Redis: SET idempotency_key (lock)
+  Engine -> Ledger: UPSERT settlement_row
+  Engine -> Notify: update(status)
+  Engine -> Redis: DEL idempotency_key
+else already processed
+  Engine -> Notify: update(status_duplicate)
+end
+Ledger -> "Reconciliation" : later read aggregates
+@enduml

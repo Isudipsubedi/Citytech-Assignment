@@ -1,0 +1,40 @@
+// PlantUML: High-level architecture for Merchant Settlement Processing
+@startuml
+title Merchant Settlement Processing - High Level Architecture
+actor MerchantAdmin
+actor Monitoring
+rectangle "User / Frontend" as FE {
+  MerchantAdmin -> FE: request settlement status
+}
+node "API Gateway / Ingress" as APIGW
+queue "Ingestion API" as Ingest
+node "Message Bus (Kafka)" as Kafka
+package "Processing Cluster (Kubernetes)" {
+  [Ingestion Service] --> Kafka
+  [Stream Processor (Flink/Kafka Streams)] --> Kafka
+  [Settlement Engine (Stateless Workers)]
+  [Idempotency Store (Redis/Etcd)]
+  [Reconciliation Service]
+}
+database "Primary OLTP (Postgres)" as Postgres
+database "Ledger / Settlement Store (Partitioned)" as Ledger
+database "Analytics / OLAP (ClickHouse, Redshift)" as OLAP
+rectangle "Notifications / Websockets" as Notify
+Monitoring --> APIGW : metrics
+APIGW -> Ingest: POST /settlements
+Ingest -> Kafka: publish(txn_batch)
+Kafka -> "Stream Processor (Flink)": consumer(group=settlement)
+"Stream Processor (Flink)" -> "Settlement Engine (Stateless Workers)": emit(settlement_tasks)
+"Settlement Engine (Stateless Workers)" -> IdempotencyStore: check/idempotency
+alt idempotent
+  "Settlement Engine" -> Ledger: upsert(settlement_row)
+  "Settlement Engine" -> Postgres: write(summary)
+else duplicate
+  "Settlement Engine" -> IdempotencyStore: ack
+end
+"Settlement Engine" -> Notify: websocket/update(status)
+"Reconciliation Service" -> Ledger: read(aggregates)
+"Reconciliation Service" -> Postgres: read(postgres_summaries)
+"Reconciliation Service" -> OLAP: analytics
+Notify -> MerchantAdmin: push(status)
+@enduml

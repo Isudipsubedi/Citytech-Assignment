@@ -172,6 +172,11 @@ docker-compose up -d postgres
 cd ../../part1-database-challenge
 psql -U postgres -h localhost -d payment_platform -f schema.sql
 psql -U postgres -h localhost -d payment_platform -f sample-data.sql
+
+# Create merchants table and sample data
+cd ../../part3-backend-challenge
+psql -U postgres -h localhost -d payment_platform -f merchants-schema.sql
+psql -U postgres -h localhost -d payment_platform -f merchants-sample-data.sql
 ```
 
 ### 2. Build & Run Application

@@ -59,18 +59,15 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
         <thead>
           <tr>
             <th>Transaction ID</th>
-            <th>Date</th>
             <th>Amount</th>
             <th>Card</th>
             <th>Status</th>
-            <th>Auth Code</th>
           </tr>
         </thead>
         <tbody>
           {transactions.map((txn) => (
             <tr key={txn.txnId}>
               <td className="txn-id">#{txn.txnId}</td>
-              <td>{formatDate(txn.txnDate)}</td>
               <td className="amount">{formatAmount(txn.amount, txn.currency)}</td>
               <td>
                 <span className="card-info">
@@ -82,7 +79,6 @@ export const TransactionList = ({ transactions, loading }: TransactionListProps)
                   {txn.status}
                 </span>
               </td>
-              <td className="auth-code">{txn.authCode}</td>
             </tr>
           ))}
         </tbody>

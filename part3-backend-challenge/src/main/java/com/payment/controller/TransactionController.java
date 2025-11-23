@@ -1,91 +1,93 @@
 package com.payment.controller;
 
-import io.micronaut.http.annotation.Controller;
-import io.swagger.v3.oas.annotations.tags.Tag;
-
+import com.payment.dto.MerchantTransactionsResponse;
+import com.payment.service.TransactionService;
 import io.micronaut.http.HttpResponse;
-import io.micronaut.http.annotation.Get;
-import io.micronaut.http.annotation.Post;
-import io.micronaut.http.annotation.Body;
-import io.micronaut.http.annotation.PathVariable;
-import io.micronaut.http.annotation.QueryValue;
-import io.micronaut.http.annotation.Header;
+import io.micronaut.http.annotation.*;
+import io.micronaut.validation.Validated;
 import io.swagger.v3.oas.annotations.Operation;
-import com.payment.entity.TransactionMaster;
-import com.payment.repository.TransactionRepository;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 
-import java.util.Map;
 import java.util.Optional;
 
 /**
- * Transaction Controller - BASIC IMPLEMENTATION PROVIDED
- * 
- * TODO for Junior Developer:
- * 1. Create TransactionService and inject it
- * 2. Implement actual database queries
- * 3. Add proper pagination
- * 4. Add date filtering
- * 5. Add status filtering
- * 6. Return proper TransactionResponse DTOs
- * 7. Add error handling
+ * Transaction Controller for merchant transactions
  */
 @Controller("/api/v1/merchants")
-@Tag(name = "Transactions")
+@Tag(name = "Transactions", description = "Merchant transaction management API")
+@Validated
 public class TransactionController {
 
-    private final TransactionRepository transactionRepository;
+    private final TransactionService transactionService;
     
-    public TransactionController(TransactionRepository transactionRepository) {
-        this.transactionRepository = transactionRepository;
+    public TransactionController(TransactionService transactionService) {
+        this.transactionService = transactionService;
     }
-
-    // TODO: Create TransactionService to handle business logic
-    // TODO: Move repository calls to service layer
 
     @Get("/{merchantId}/transactions")
     @Operation(
         summary = "Get merchant transactions",
-        description = "Returns paginated list of transactions for a merchant. TODO: Implement proper pagination, filtering, and database queries."
+        description = "Returns paginated list of transactions for a merchant with optional filtering by date range and status"
     )
-    public HttpResponse<Map<String, Object>> getTransactions(
-            @PathVariable String merchantId,
-            @QueryValue Optional<Integer> page,
-            @QueryValue Optional<Integer> size,
-            @QueryValue Optional<String> startDate,
-            @QueryValue Optional<String> endDate,
-            @QueryValue Optional<String> status
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved transactions")
+    @ApiResponse(responseCode = "400", description = "Invalid input parameters")
+    @ApiResponse(responseCode = "404", description = "Merchant not found")
+    public HttpResponse<MerchantTransactionsResponse> getTransactions(
+        @Parameter(description = "Merchant ID", example = "MCH-00001") 
+        @PathVariable String merchantId,
+        
+        @Parameter(description = "Page number (0-based)", example = "0") 
+        @QueryValue(defaultValue = "0") 
+        @Min(0) 
+        int page,
+        
+        @Parameter(description = "Page size", example = "20") 
+        @QueryValue(defaultValue = "20") 
+        @Min(1) 
+        int size,
+        
+        @Parameter(description = "Start date (ISO format or YYYY-MM-DD)", example = "2025-11-01") 
+        @QueryValue 
+        Optional<String> startDate,
+        
+        @Parameter(description = "End date (ISO format or YYYY-MM-DD)", example = "2025-11-18") 
+        @QueryValue 
+        Optional<String> endDate,
+        
+        @Parameter(description = "Filter by status (pending, completed, failed, reversed)") 
+        @QueryValue 
+        Optional<String> status
     ) {
-        // TODO: Replace this stub with actual implementation
-        var transactions = transactionRepository.findByMerchantId(merchantId);
-        return HttpResponse.ok(Map.of(
-            "message", "TODO: Implement proper pagination and filtering",
-            "merchantId", merchantId,
-            "page", page.orElse(0),
-            "size", size.orElse(10),
-            "totalTransactions", transactions.size(),
-            "transactions", transactions,
-            "note", "Basic query implemented. Junior developer should add pagination, date filtering, and status filtering."
-        ));
-    }
-
-    @Post("/{merchantId}/transactions")
-    @Operation(
-        summary = "Create new transaction",
-        description = "Creates a new transaction for a merchant. TODO: Add validation, error handling, and business logic."
-    )
-    public HttpResponse<Map<String, Object>> createTransaction(
-            @PathVariable String merchantId,
-            @Body TransactionMaster transaction
-    ) {
-        // TODO: Add validation
-        // TODO: Add error handling
-        // TODO: Move to service layer
-        transaction.setMerchantId(merchantId);
-        TransactionMaster saved = transactionRepository.save(transaction);
-        return HttpResponse.created(Map.of(
-            "message", "Transaction created",
-            "transactionId", saved.getTxnId(),
-            "note", "TODO: Add proper validation and error handling"
-        ));
+        // Validate date range if both dates are provided
+        if (startDate.isPresent() && endDate.isPresent()) {
+            String start = startDate.get();
+            String end = endDate.get();
+            // Basic validation - in production, parse and compare actual dates
+            if (start.compareTo(end) > 0) {
+                throw new IllegalArgumentException("Start date must be before or equal to end date");
+            }
+        }
+        
+        // Validate status if provided
+        if (status.isPresent()) {
+            String statusValue = status.get();
+            if (!statusValue.matches("^(pending|completed|failed|reversed)$")) {
+                throw new IllegalArgumentException("Status must be one of: pending, completed, failed, reversed");
+            }
+        }
+        
+        MerchantTransactionsResponse response = transactionService.getMerchantTransactions(
+            merchantId,
+            page,
+            size,
+            startDate.orElse(null),
+            endDate.orElse(null),
+            status.orElse(null)
+        );
+        return HttpResponse.ok(response);
     }
 }
