@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Table } from '../common/Table';
 import { Input } from '../common/Input';
 import { Button } from '../common/Button';
@@ -26,6 +26,8 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
   const [totalCount, setTotalCount] = useState(0);
   
   // Search and filter state
+  // Use separate state for input value (immediate) and debounced search query (for API)
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   
@@ -37,18 +39,54 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  // Fetch merchants with pagination
+  // Debounce search input - update searchQuery after user stops typing
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new timeout to update searchQuery after 500ms of no typing
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchQuery(searchInput);
+      setCurrentPage(1); // Reset to page 1 when search changes
+    }, 500);
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchInput]);
+
+  // Reset to page 1 and clear filters when refreshTrigger changes (after create/update/delete)
+  // This ensures new/updated merchants appear in the list immediately
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      // Clear search and filters so the new/updated merchant is visible
+      setSearchInput('');
+      setSearchQuery('');
+      setStatusFilter('');
+      setCurrentPage(1);
+    }
+  }, [refreshTrigger]);
+
+  // Fetch merchants with pagination and sorting (backend handles sorting)
   useEffect(() => {
     const fetchMerchants = async () => {
       setLoading(true);
       setError(null);
       try {
-        console.log(`[MerchantList] Fetching page ${currentPage} with pageSize ${pageSize}`);
+        console.log(`[MerchantList] Fetching page ${currentPage} with pageSize ${pageSize}, search: "${searchQuery}", status: "${statusFilter}", sortField: "${sortField}", sortDirection: "${sortDirection}"`);
         const response = await getMerchants({
           page: currentPage,
           limit: pageSize,
           search: searchQuery || undefined,
           status: statusFilter || undefined,
+          sortField: sortField,
+          sortDirection: sortDirection,
         });
         setMerchants(response.merchants);
         // Update total count - if we got less than pageSize, we know the exact count
@@ -68,62 +106,10 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
     };
 
     fetchMerchants();
-  }, [refreshTrigger, currentPage, pageSize]);
+  }, [refreshTrigger, currentPage, pageSize, searchQuery, statusFilter, sortField, sortDirection]);
 
-  // Filter and search merchants
-  const filteredMerchants = useMemo(() => {
-    return merchants.filter((merchant) => {
-      const matchesSearch =
-        merchant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        merchant.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (merchant.id && merchant.id.toLowerCase().includes(searchQuery.toLowerCase()));
-      
-      const matchesStatus = !statusFilter || merchant.status === statusFilter;
-      
-      return matchesSearch && matchesStatus;
-    });
-  }, [merchants, searchQuery, statusFilter]);
-
-  // Sort merchants
-  const sortedMerchants = useMemo(() => {
-    const sorted = [...filteredMerchants];
-    sorted.sort((a, b) => {
-      let aValue: string | number = '';
-      let bValue: string | number = '';
-
-      switch (sortField) {
-        case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
-          break;
-        case 'email':
-          aValue = a.email.toLowerCase();
-          bValue = b.email.toLowerCase();
-          break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        case 'createdAt':
-          aValue = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          bValue = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          break;
-        case 'updatedAt':
-          aValue = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-          bValue = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-          break;
-      }
-
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return sorted;
-  }, [filteredMerchants, sortField, sortDirection]);
-
-  // Use sorted merchants directly (server already sent the correct page)
-  // No need for client-side pagination since server handles it
-  const paginatedMerchants = sortedMerchants;
+  // Backend handles sorting, so we use merchants directly
+  const paginatedMerchants = merchants;
   
   // Calculate total pages from server total count
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -151,6 +137,7 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
 
   // Reset filters
   const handleResetFilters = () => {
+    setSearchInput('');
     setSearchQuery('');
     setStatusFilter('');
     setCurrentPage(1);
@@ -184,10 +171,9 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
             <Input
               type="text"
               placeholder="Search by name, email, or ID..."
-              value={searchQuery}
+              value={searchInput}
               onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
+                setSearchInput(e.target.value);
               }}
               style={{ minWidth: '250px' }}
             />
@@ -420,14 +406,14 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
       </div>
 
       {/* Pagination Section */}
-      {sortedMerchants.length > 0 && (
+      {paginatedMerchants.length > 0 && (
         <div className="merchant-list-pagination">
           <div className="pagination-info">
             <span>
-              Showing {paginatedMerchants.length} of {sortedMerchants.length} merchants
+              Showing {paginatedMerchants.length} of {totalCount} merchants
               {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
             </span>
-            <select
+            {/* <select
               className="input"
               value={pageSize}
               onChange={handlePageSizeChange}
@@ -438,7 +424,7 @@ export const MerchantList: React.FC<MerchantListProps> = ({ refreshTrigger = 0, 
                   {size} per page
                 </option>
               ))}
-            </select>
+            </select> */}
           </div>
 
           {totalPages > 1 && (

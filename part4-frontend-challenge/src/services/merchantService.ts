@@ -31,6 +31,8 @@ export interface GetMerchantsParams {
   limit?: number;
   search?: string;
   status?: string;
+  sortField?: string;
+  sortDirection?: string;
 }
 
 export interface GetMerchantsResponse {
@@ -47,6 +49,8 @@ export const getMerchants = async (params?: GetMerchantsParams): Promise<GetMerc
     const limit = params?.limit || 20;
     const search = params?.search;
     const status = params?.status;
+    const sortField = params?.sortField || 'name';
+    const sortDirection = params?.sortDirection || 'asc';
     
     const queryParams: any = {
       page: page,
@@ -60,8 +64,12 @@ export const getMerchants = async (params?: GetMerchantsParams): Promise<GetMerc
     if (status) {
       queryParams.status = status;
     }
+    
+    // Add sort parameters
+    queryParams.sortField = sortField;
+    queryParams.sortDirection = sortDirection;
 
-    console.log(`[MerchantService] Fetching merchants - page: ${page}, size: ${limit}, search: ${search}, status: ${status}`);
+    console.log(`[MerchantService] Fetching merchants - page: ${page}, size: ${limit}, search: ${search}, status: ${status}, sortField: ${sortField}, sortDirection: ${sortDirection}`);
     
     // Backend returns PaginatedResponse with data, totalCount, totalPages, etc.
     const response = await get<BackendPaginatedResponse>(MERCHANTS_ENDPOINT, { params: queryParams });

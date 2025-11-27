@@ -33,28 +33,25 @@ public class MerchantServiceImpl implements MerchantService {
         int page,
         int size,
         String search,
-        String status
+        String status,
+        String sortField,
+        String sortDirection
     ) {
-        LOG.debug("Getting merchants - page: {}, size: {}, search: {}, status: {}", page, size, search, status);
+        LOG.debug("Getting merchants - page: {}, size: {}, search: {}, status: {}, sortField: {}, sortDirection: {}", 
+            page, size, search, status, sortField, sortDirection);
 
-        // Adjust page to 0-based for Micronaut Data
-        int pageNumber = Math.max(0, page - 1);
-        io.micronaut.data.model.Pageable pageable = io.micronaut.data.model.Pageable.from(pageNumber, size);
-
-        io.micronaut.data.model.Page<Merchant> merchantPage;
-
-        // Apply filters
+        // Fetch all merchants (or filtered by status) first
+        List<Merchant> allMerchants;
         if (status != null && !status.trim().isEmpty()) {
-            merchantPage = merchantRepository.findByStatus(status, pageable);
+            allMerchants = merchantRepository.findByStatus(status);
         } else {
-            merchantPage = merchantRepository.findAll(pageable);
+            allMerchants = merchantRepository.findAll();
         }
 
-        // Apply search filter if provided
-        List<Merchant> merchants = merchantPage.getContent();
+        // Apply search filter BEFORE sorting and pagination
         if (search != null && !search.trim().isEmpty()) {
             String searchLower = search.toLowerCase();
-            merchants = merchants.stream()
+            allMerchants = allMerchants.stream()
                 .filter(m -> 
                     (m.getName() != null && m.getName().toLowerCase().contains(searchLower)) ||
                     (m.getId() != null && m.getId().toLowerCase().contains(searchLower)) ||
@@ -63,14 +60,76 @@ public class MerchantServiceImpl implements MerchantService {
                 .collect(Collectors.toList());
         }
 
+        // Sort the entire dataset BEFORE pagination
+        String sortFieldLower = (sortField != null) ? sortField.toLowerCase() : "name";
+        boolean ascending = !"desc".equalsIgnoreCase(sortDirection);
+        
+        allMerchants.sort((a, b) -> {
+            int comparison = 0;
+            
+            switch (sortFieldLower) {
+                case "name":
+                    String nameA = (a.getName() != null) ? a.getName().toLowerCase() : "";
+                    String nameB = (b.getName() != null) ? b.getName().toLowerCase() : "";
+                    comparison = nameA.compareTo(nameB);
+                    break;
+                case "email":
+                    String emailA = (a.getEmail() != null) ? a.getEmail().toLowerCase() : "";
+                    String emailB = (b.getEmail() != null) ? b.getEmail().toLowerCase() : "";
+                    comparison = emailA.compareTo(emailB);
+                    break;
+                case "status":
+                    String statusA = (a.getStatus() != null) ? a.getStatus() : "";
+                    String statusB = (b.getStatus() != null) ? b.getStatus() : "";
+                    comparison = statusA.compareTo(statusB);
+                    break;
+                case "createdat":
+                case "created_at":
+                    if (a.getCreatedAt() != null && b.getCreatedAt() != null) {
+                        comparison = a.getCreatedAt().compareTo(b.getCreatedAt());
+                    } else if (a.getCreatedAt() != null) {
+                        comparison = 1;
+                    } else if (b.getCreatedAt() != null) {
+                        comparison = -1;
+                    }
+                    break;
+                case "updatedat":
+                case "updated_at":
+                    if (a.getUpdatedAt() != null && b.getUpdatedAt() != null) {
+                        comparison = a.getUpdatedAt().compareTo(b.getUpdatedAt());
+                    } else if (a.getUpdatedAt() != null) {
+                        comparison = 1;
+                    } else if (b.getUpdatedAt() != null) {
+                        comparison = -1;
+                    }
+                    break;
+                default:
+                    // Default to name sorting
+                    String defaultNameA = (a.getName() != null) ? a.getName().toLowerCase() : "";
+                    String defaultNameB = (b.getName() != null) ? b.getName().toLowerCase() : "";
+                    comparison = defaultNameA.compareTo(defaultNameB);
+            }
+            
+            return ascending ? comparison : -comparison;
+        });
+
+        // Calculate pagination info based on filtered and sorted results
+        long totalCount = allMerchants.size();
+        int totalPages = (int) Math.ceil((double) totalCount / size);
+        
+        // Apply pagination manually AFTER sorting
+        int pageNumber = Math.max(0, page - 1);
+        int startIndex = pageNumber * size;
+        int endIndex = Math.min(startIndex + size, allMerchants.size());
+        
+        List<Merchant> paginatedMerchants = startIndex < allMerchants.size() 
+            ? allMerchants.subList(startIndex, endIndex)
+            : List.of();
+
         // Convert to response DTOs
-        List<MerchantResponse> responses = merchants.stream()
+        List<MerchantResponse> responses = paginatedMerchants.stream()
             .map(this::toResponse)
             .collect(Collectors.toList());
-
-        // Calculate pagination info
-        long totalCount = merchantPage.getTotalSize();
-        int totalPages = (int) Math.ceil((double) totalCount / size);
 
         return new PaginatedResponse<>(
             responses,

@@ -10,13 +10,15 @@ import com.payment.dto.PaginatedResponse;
 public interface MerchantService {
 
     /**
-     * Get paginated list of merchants with optional search and filter
+     * Get paginated list of merchants with optional search, filter, and sorting
      */
     PaginatedResponse<MerchantResponse> getMerchants(
         int page,
         int size,
         String search,
-        String status
+        String status,
+        String sortField,
+        String sortDirection
     );
 
     /**

@@ -32,20 +32,24 @@ public class MerchantController {
     @Get
     @Operation(
         summary = "Get all merchants",
-        description = "Retrieve a paginated list of merchants with optional search and filter"
+        description = "Retrieve a paginated list of merchants with optional search, filter, and sorting"
     )
     @ApiResponse(responseCode = "200", description = "Successfully retrieved merchants")
     public HttpResponse<PaginatedResponse<MerchantResponse>> getMerchants(
         @Parameter(description = "Page number (1-based)", example = "1") @QueryValue(defaultValue = "1") int page,
         @Parameter(description = "Page size", example = "20") @QueryValue(defaultValue = "20") int limit,
         @Parameter(description = "Search term (name, ID, or email)") @QueryValue Optional<String> search,
-        @Parameter(description = "Filter by status (active/inactive)") @QueryValue Optional<String> status
+        @Parameter(description = "Filter by status (active/inactive)") @QueryValue Optional<String> status,
+        @Parameter(description = "Sort field (name, email, status, createdAt, updatedAt)", example = "name") @QueryValue Optional<String> sortField,
+        @Parameter(description = "Sort direction (asc, desc)", example = "asc") @QueryValue Optional<String> sortDirection
     ) {
         PaginatedResponse<MerchantResponse> response = merchantService.getMerchants(
             page, 
             limit, 
             search.orElse(null), 
-            status.orElse(null)
+            status.orElse(null),
+            sortField.orElse("name"),
+            sortDirection.orElse("asc")
         );
         return HttpResponse.ok(response);
     }
